@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CS203 FSM Simulator</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <style>
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background-color: #f8fafc;
+  color: #0f172a;
+  margin: 0;
+  padding: 24px 16px;
+}
+.mono {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+</style>
+</head>
+<body>
+  <div class="max-w-2xl mx-auto space-y-5">
+
+    <!-- Header -->
+    <div class="border-b border-slate-200 pb-3 flex items-center justify-between flex-wrap gap-2">
+      <div>
+        <h1 class="text-lg font-bold text-slate-900">CS203: Fault-Resilient FSM Simulator</h1>
+        <p class="text-xs text-slate-500">Target PIN Sequence: <span class="mono font-semibold text-slate-800">1010</span></p>
+      </div>
+      <button type="button" onclick="window.SIM.reset()"
+        class="px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-xs font-medium text-slate-700">
+        Reset FSM
+      </button>
+    </div>
+
+    <!-- 1. Inputs Card -->
+    <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-4">
+      <h2 class="text-xs font-bold uppercase tracking-wider text-slate-500">1. Simulation Inputs</h2>
+
+      <!-- Mode Selector -->
+      <div>
+        <label for="archSelect" class="block text-xs font-medium text-slate-700 mb-1">Select Architecture:</label>
+        <select id="archSelect" onchange="window.SIM.setArch(this.value)"
+          class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-blue-600">
+          <option value="unified">Combined All-in-One (secure_fsm_top)</option>
+          <option value="baseline">Baseline Unprotected FSM</option>
+          <option value="sol1">Solution 1: Simple 1-Bit Input Parity</option>
+          <option value="sol2">Solution 2: Parity Protected State Register</option>
+          <option value="sol3">Solution 3: Increased Hamming Distance (d &gt;= 2)</option>
+          <option value="sol4">Solution 4: Extended Hamming SECDED (8,4)</option>
+          <option value="sol5">Solution 5: Dual Modular Redundancy (DMR)</option>
+          <option value="sol6">Solution 6: Triple Modular Redundancy (TMR)</option>
+        </select>
+      </div>
+
+      <!-- Bit Input & Fault Mask Row -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+        <!-- Send Input Bit -->
+        <div>
+          <div class="text-xs font-medium text-slate-700 mb-1.5">Step Serial Input (`auth_in`):</div>
+          <div class="flex gap-2">
+            <button type="button" onclick="window.SIM.stepBit(1)"
+              class="flex-1 py-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-semibold text-sm mono transition">
+              Input 1
+            </button>
+            <button type="button" onclick="window.SIM.stepBit(0)"
+              class="flex-1 py-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-semibold text-sm mono transition">
+              Input 0
+            </button>
+          </div>
+        </div>
+
+        <!-- 4-Bit Fault Mask -->
+        <div>
+          <div class="flex items-center justify-between text-xs font-medium text-slate-700 mb-1.5">
+            <span>Fault Mask (`fault_mask`):</span>
+            <span id="maskPreview" class="mono text-slate-500">0000</span>
+          </div>
+          <div class="flex gap-2">
+            <button id="maskBtn0" type="button" onclick="window.SIM.toggleMaskBit(0)">0</button>
+            <button id="maskBtn1" type="button" onclick="window.SIM.toggleMaskBit(1)">0</button>
+            <button id="maskBtn2" type="button" onclick="window.SIM.toggleMaskBit(2)">0</button>
+            <button id="maskBtn3" type="button" onclick="window.SIM.toggleMaskBit(3)">0</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Test Scenarios -->
+      <div class="pt-2 border-t border-slate-100">
+        <div class="text-xs text-slate-500 mb-2">Quick Test Scenarios:</div>
+        <div class="flex flex-wrap gap-2">
+          <button type="button" onclick="window.SIM.presetValid()"
+            class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-medium text-slate-800">
+            Valid PIN (1010)
+          </button>
+          <button type="button" onclick="window.SIM.presetWrong()"
+            class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-medium text-slate-800">
+            Wrong PIN (0000)
+          </button>
+          <button type="button" onclick="window.SIM.presetBypass1Bit()"
+            class="px-3 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 border border-red-200 text-xs font-medium text-red-700">
+            1-Bit Bypass (LOCKED ^ 0100)
+          </button>
+          <button type="button" onclick="window.SIM.presetBypassEven()"
+            class="px-3 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-200 text-xs font-medium text-amber-800">
+            Even-Bit Bypass (ERR_1 ^ 1111)
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. Outputs Card -->
+    <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-4">
+      <h2 class="text-xs font-bold uppercase tracking-wider text-slate-500">2. Simulation Outputs</h2>
+
+      <!-- Status Message -->
+      <div id="statusBox" class="p-3 rounded-lg bg-slate-100 border border-slate-200 text-slate-700 text-sm">
+        FSM is in IDLE (0000). Enter bits 1 → 0 → 1 → 0 to unlock.
+      </div>
+
+      <!-- Main State & Output Grid -->
+      <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+        <div class="p-3 rounded-lg bg-slate-50 border border-slate-200">
+          <div class="text-slate-500">Clock Cycle</div>
+          <div id="outCycle" class="mono font-bold text-slate-900 text-sm mt-0.5">0</div>
+        </div>
+        <div class="p-3 rounded-lg bg-slate-50 border border-slate-200">
+          <div class="text-slate-500">Entered Bits</div>
+          <div id="outHistory" class="mono font-bold text-slate-900 text-sm mt-0.5">None</div>
+        </div>
+        <div class="p-3 rounded-lg bg-slate-50 border border-slate-200">
+          <div class="text-slate-500">Last Fault Mask</div>
+          <div id="outMaskUsed" class="mono font-bold text-slate-900 text-sm mt-0.5">0000</div>
+        </div>
+        <div class="p-3 rounded-lg bg-slate-50 border border-slate-200">
+          <div class="text-slate-500">Actual State (`state_out`)</div>
+          <div id="outStateA" class="mono font-bold text-slate-900 text-sm mt-0.5">0000 (IDLE)</div>
+        </div>
+        <div class="p-3 rounded-lg bg-slate-50 border border-slate-200">
+          <div class="text-slate-500">Expected State (Golden)</div>
+          <div id="outStateGolden" class="mono font-bold text-slate-900 text-sm mt-0.5">0000 (IDLE)</div>
+        </div>
+        <div class="p-3 rounded-lg bg-slate-50 border border-slate-200">
+          <div class="text-slate-500">Attack Detected</div>
+          <div id="outAttack" class="mono text-slate-600 text-sm mt-0.5">0 — NONE</div>
+        </div>
+      </div>
+
+      <!-- Final Access Decision -->
+      <div class="p-3 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-between text-sm">
+        <span class="font-medium text-slate-700">Output `access_granted`:</span>
+        <span id="outAccess" class="mono font-semibold text-slate-700">0 — ACCESS DENIED</span>
+      </div>
+
+      <!-- Countermeasure Breakdown Table -->
+      <div class="border-t border-slate-100 pt-3">
+        <div class="text-xs font-medium text-slate-500 mb-2">Countermeasure Detector Signals:</div>
+        <div class="divide-y divide-slate-100 text-xs border border-slate-200 rounded-lg overflow-hidden">
+          <div class="px-3 py-2 flex justify-between bg-white">
+            <span class="text-slate-600">Parity Check (`parity_err`)</span>
+            <span id="outParity" class="mono font-medium text-slate-900">0 (OK)</span>
+          </div>
+          <div class="px-3 py-2 flex justify-between bg-slate-50/60">
+            <span class="text-slate-600">DMR Check (`dmr_err`)</span>
+            <span id="outDmr" class="mono font-medium text-slate-900">0 (Match)</span>
+          </div>
+          <div class="px-3 py-2 flex justify-between bg-white">
+            <span class="text-slate-600">TMR Majority Voter (`voted_state`)</span>
+            <span id="outTmr" class="mono font-medium text-slate-900">0000 (IDLE)</span>
+          </div>
+          <div class="px-3 py-2 flex justify-between bg-slate-50/60">
+            <span class="text-slate-600">Extended Hamming SECDED (`ecc_state`)</span>
+            <span id="outEcc" class="mono font-medium text-slate-900">0000 (IDLE) — Clean</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  <script>
+(function () {
+  const STATES = {
+    "0000": "IDLE",
+    "0100": "GOT_1",
+    "0101": "GOT_10",
+    "0110": "GOT_101",
+    "0111": "SUCCESS",
+    "1000": "ERR_1",
+    "1001": "ERR_2",
+    "1010": "ERR_3",
+    "0011": "LOCKED"
+  };
+
+  const sim = {
+    arch: "unified",
+    cycle: 0,
+    mask: [0, 0, 0, 0], // [b3, b2, b1, b0]
+    stateA: "0000",
+    stateGolden: "0000",
+    history: [],
+    lastMaskUsed: "0000"
+  };
+
+  function xor4(a, b) {
+    let out = "";
+    for (let i = 0; i < 4; i++) out += (a[i] === b[i]) ? "0" : "1";
+    return out;
+  }
+
+  function parity4(s) {
+    let p = 0;
+    for (let i = 0; i < 4; i++) if (s[i] === "1") p ^= 1;
+    return p;
+  }
+
+  function weight4(s) {
+    let w = 0;
+    for (let i = 0; i < 4; i++) if (s[i] === "1") w++;
+    return w;
+  }
+
+  function nextState(curr, bit) {
+    switch (curr) {
+      case "0000": return bit === 1 ? "0100" : "1000";
+      case "0100": return bit === 0 ? "0101" : "1001";
+      case "0101": return bit === 1 ? "0110" : "1010";
+      case "0110": return bit === 0 ? "0111" : "0011";
+      case "1000": return "1001";
+      case "1001": return "1010";
+      case "1010": return "0011";
+      case "0111": return "0111";
+      case "0011": return "0011";
+      default:     return "0000";
+    }
+  }
+
+  function stateLabel(code) {
+    return `${code} (${STATES[code] || "CORRUPTED"})`;
+  }
+
+  function getMaskStr() {
+    return `${sim.mask[0]}${sim.mask[1]}${sim.mask[2]}${sim.mask[3]}`;
+  }
+
+  function step(bit, customMaskStr) {
+    const b = Number(bit);
+    const maskStr = customMaskStr || getMaskStr();
+    sim.lastMaskUsed = maskStr;
+    sim.cycle += 1;
+    sim.history.push(b);
+
+    const nextG = nextState(sim.stateGolden, b);
+    const baseA = (sim.arch === "sol4" || sim.arch === "sol6") ? sim.stateGolden : sim.stateA;
+    const nextA = nextState(baseA, b);
+
+    sim.stateGolden = nextG;
+    sim.stateA = xor4(nextA, maskStr);
+
+    // Reset mask toggles to 0000 after injection
+    sim.mask = [0, 0, 0, 0];
+    render();
+  }
+
+  function reset() {
+    sim.cycle = 0;
+    sim.mask = [0, 0, 0, 0];
+    sim.stateA = "0000";
+    sim.stateGolden = "0000";
+    sim.history = [];
+    sim.lastMaskUsed = "0000";
+    render();
+  }
+
+  function render() {
+    // Update mask buttons
+    for (let i = 0; i < 4; i++) {
+      const btn = document.getElementById(`maskBtn${i}`);
+      if (btn) {
+        btn.textContent = String(sim.mask[i]);
+        btn.className = sim.mask[i]
+          ? "w-11 h-11 rounded-lg border-2 border-red-500 bg-red-50 text-red-700 font-bold mono text-base transition"
+          : "w-11 h-11 rounded-lg border border-slate-300 bg-white text-slate-800 font-semibold mono text-base hover:bg-slate-50 transition";
+      }
+    }
+    const maskPreview = document.getElementById("maskPreview");
+    if (maskPreview) maskPreview.textContent = getMaskStr();
+
+    // Compute outputs based on current stateA, stateGolden, and lastMaskUsed
+    const wt = weight4(sim.lastMaskUsed);
+    const hasFault = sim.stateA !== sim.stateGolden;
+    const parityErr = (parity4(sim.stateA) !== parity4(sim.stateGolden)) ? 1 : 0;
+    const dmrErr = hasFault ? 1 : 0;
+    const tmrErr = hasFault ? 1 : 0;
+    const votedState = sim.stateGolden; // 2-out-of-3 majority matches Golden B & C
+
+    const eccErr = hasFault ? 1 : 0;
+    const eccCorr = (wt === 1 && hasFault) ? 1 : 0;
+    const eccUnc = (wt > 1 && hasFault) ? 1 : 0;
+    const eccState = eccCorr ? sim.stateGolden : sim.stateA;
+
+    const rawAccess = (sim.stateA === "0111") ? 1 : 0;
+    let finalAccess = rawAccess;
+    let attackDetected = 0;
+
+    if (sim.arch === "baseline") {
+      finalAccess = rawAccess;
+      attackDetected = 0;
+    } else if (sim.arch === "sol1" || sim.arch === "sol2") {
+      attackDetected = parityErr;
+      finalAccess = (rawAccess && !parityErr) ? 1 : 0;
+    } else if (sim.arch === "sol3") {
+      attackDetected = (wt === 1 && hasFault) ? 1 : 0;
+      finalAccess = (rawAccess && !attackDetected) ? 1 : 0;
+    } else if (sim.arch === "sol4") {
+      attackDetected = eccErr;
+      finalAccess = (!eccUnc && eccState === "0111") ? 1 : 0;
+    } else if (sim.arch === "sol5") {
+      attackDetected = dmrErr;
+      finalAccess = (rawAccess && !dmrErr) ? 1 : 0;
+    } else if (sim.arch === "sol6") {
+      attackDetected = tmrErr;
+      finalAccess = (votedState === "0111") ? 1 : 0;
+    } else {
+      // Unified
+      attackDetected = (parityErr | dmrErr | tmrErr | eccErr) ? 1 : 0;
+      finalAccess = (votedState === "0111" && !dmrErr) ? 1 : 0;
+    }
+
+    setText("outCycle", String(sim.cycle));
+    setText("outHistory", sim.history.length ? sim.history.join(" → ") : "None");
+    setText("outMaskUsed", sim.lastMaskUsed);
+    setText("outStateA", stateLabel(sim.stateA));
+    setText("outStateGolden", stateLabel(sim.stateGolden));
+
+    const elAccess = document.getElementById("outAccess");
+    if (elAccess) {
+      if (finalAccess === 1 && sim.stateGolden !== "0111") {
+        elAccess.textContent = "1 — UNAUTHORIZED BYPASS!";
+        elAccess.className = "mono font-bold text-red-600";
+      } else if (finalAccess === 1) {
+        elAccess.textContent = "1 — ACCESS GRANTED";
+        elAccess.className = "mono font-bold text-emerald-600";
+      } else {
+        elAccess.textContent = "0 — ACCESS DENIED";
+        elAccess.className = "mono font-semibold text-slate-700";
+      }
+    }
+
+    const elAttack = document.getElementById("outAttack");
+    if (elAttack) {
+      elAttack.textContent = attackDetected ? "1 — FAULT DETECTED" : (hasFault ? "0 — MISSED (UNDETECTED)" : "0 — NONE");
+      elAttack.className = attackDetected
+        ? "mono font-bold text-amber-600"
+        : (hasFault ? "mono font-bold text-red-600" : "mono text-slate-600");
+    }
+
+    setText("outParity", hasFault ? (parityErr ? "1 (Detected)" : "0 (Blind to Even-Bit Fault)") : "0 (OK)");
+    setText("outDmr", dmrErr ? "1 (Mismatch Caught)" : "0 (Match)");
+    setText("outTmr", `${stateLabel(votedState)}${tmrErr ? " — Masked Fault" : ""}`);
+    setText(
+      "outEcc",
+      eccCorr
+        ? `${stateLabel(eccState)} — 1-Bit Corrected`
+        : (eccUnc ? "Uncorrectable Multi-Bit (Locked)" : `${stateLabel(eccState)} — Clean`)
+    );
+
+    const statusBox = document.getElementById("statusBox");
+    if (statusBox) {
+      if (sim.cycle === 0) {
+        statusBox.textContent = "FSM is in IDLE (0000). Enter bits 1 → 0 → 1 → 0 to unlock.";
+        statusBox.className = "p-3 rounded-lg bg-slate-100 border border-slate-200 text-slate-700 text-sm";
+      } else if (finalAccess === 1 && sim.stateGolden !== "0111") {
+        statusBox.textContent = `Security Breach! Fault mask ${sim.lastMaskUsed} flipped state to SUCCESS (0111).`;
+        statusBox.className = "p-3 rounded-lg bg-red-50 border border-red-200 text-red-800 text-sm font-medium";
+      } else if (hasFault && finalAccess === 0) {
+        statusBox.textContent = `Fault injected (mask ${sim.lastMaskUsed}), but hardware defense blocked unauthorized access.`;
+        statusBox.className = "p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-sm font-medium";
+      } else if (finalAccess === 1) {
+        statusBox.textContent = "Correct PIN (1010) entered! State is SUCCESS (0111) and Access is Granted.";
+        statusBox.className = "p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm font-medium";
+      } else {
+        statusBox.textContent = `Step ${sim.cycle}: Current State is ${stateLabel(sim.stateA)}.`;
+        statusBox.className = "p-3 rounded-lg bg-slate-100 border border-slate-200 text-slate-700 text-sm";
+      }
+    }
+  }
+
+  function setText(id, val) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = val;
+  }
+
+  window.SIM = {
+    setArch(val) {
+      sim.arch = val;
+      reset();
+    },
+    toggleMaskBit(idx) {
+      sim.mask[idx] = sim.mask[idx] ? 0 : 1;
+      render();
+    },
+    stepBit(b) {
+      step(b);
+    },
+    reset,
+    presetValid() {
+      reset();
+      [1, 0, 1, 0].forEach(b => step(b, "0000"));
+    },
+    presetWrong() {
+      reset();
+      [0, 0, 0, 0].forEach(b => step(b, "0000"));
+    },
+    presetBypass1Bit() {
+      reset();
+      [0, 0, 0, 0].forEach(b => step(b, "0000")); // Reaches LOCKED (0011)
+      step(0, "0100"); // 0011 ^ 0100 = 0111 (SUCCESS)
+    },
+    presetBypassEven() {
+      reset();
+      step(0, "1111"); // Expects ERR_1 (1000) ^ 1111 = 0111 (SUCCESS)
+    }
+  };
+
+  window.addEventListener("DOMContentLoaded", reset);
+})();
+
+</script>
+</body>
+</html>
